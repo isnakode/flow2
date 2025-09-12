@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+@plugin 'daisyui'{
+  themes: 'light --default'
+}
 
 @layer base {
     [tabindex]:focus {
@@ -12,9 +15,13 @@
 }
 
 .svelte-flow__resize-control.handle {
-  @apply w-3! h-3! bg-blue-300! rounded-sm!;
+  @apply w-3! h-3! bg-white! border-[3px]! border-blue-300! rounded-sm!;
 }
 
 .svelte-flow__resize-control.line {
   @apply border-2! border-blue-300! ;
+}
+
+.svelte-flow__handle{
+  @apply  bg-blue-600!
 }
