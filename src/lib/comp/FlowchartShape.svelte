@@ -1,23 +1,17 @@
 <script>
-   const {
-      width,
-      height,
-      type,
-      strokeWidth = 1,
-      stroke = "#6B6B6B",
-      fill = "#dbdbdb",
-   } = $props();
+   const { width, height, type, strokeWidth = 1, stroke, fill } = $props();
 </script>
 
 <svg
    {width}
    {height}
    {fill}
-   viewBox="-{strokeWidth / 2} -{strokeWidth / 2} 
-   {width + strokeWidth} {height + strokeWidth}"
+   viewBox="-{strokeWidth / 2} -{strokeWidth / 2} {width +
+      strokeWidth} {height + strokeWidth}"
    stroke-width={strokeWidth}
-   {stroke}
+   stroke={strokeWidth > 0 ? stroke : "transparent"}
    stroke-linejoin="round"
+   preserveAspectRatio="none"
 >
    {#if type == "start"}
       {@const r = Math.min(height, width) / 2}
@@ -35,7 +29,7 @@
    {:else if type == "doc"}
       {@const waveHeight = height * 0.1}
       <path
-         d="M0 0H {width}V{height - waveHeight}Q 
+         d="M0 0H{width}V{height - waveHeight}Q 
          {width - width / 2 / 2} {height + waveHeight} 
          {width - width / 2} {height - waveHeight}T0 {height - waveHeight}Z"
       />
@@ -84,10 +78,14 @@
          d="M{bevel} 0H{width - bevel}L{width} {bevel}V{height}H0V{bevel}Z"
       />
    {:else if type == "delay"}
-      {@const r = height / 2}
-      <path d="M0 0H{width - r}A{r} {r} 0 1 1 {width - r} {height}H0Z" />
+      {@const rx = width / 2}
+      {@const ry = height / 2}
+      {@const r = Math.min(rx, ry)}
+      <path d="M0 0H{width - r}A{r} {ry} 0 11 {width - r} {height}H0Z" />
    {:else if type == "display"}
-      {@const r = height / 2}
+      {@const rx = width / 2}
+      {@const ry = height / 2}
+      {@const r = Math.min(rx, ry)}
       <path
          d="M0 {r}L{r * 0.8} 0H{width - r} A{r} {r} 0 1 1 
          {width - r} {height}H{r * 0.8}Z"
@@ -99,7 +97,7 @@
       {@const r = height / 2}
       {@const w = Math.min(width * 0.15, r * 0.7)}
       <path
-         d="M{w} {height}A{Math.min(w, r)} {r} 0 1 1 {w} 0
+         d="M{w} {height}A{Math.min(w, r)} {r} 0 11 {w} 0
          H{width - w}V{height}Z"
       />
       <ellipse cx={width - w} cy={r} rx={Math.min(w, r)} ry={r} />

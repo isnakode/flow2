@@ -14,7 +14,13 @@
       selected,
       data,
    }: NodeProps<
-      Node<{ type: string; stroke: number; willConnect: boolean }>
+      Node<{
+         type: string;
+         strokeWidth: number;
+         willConnect: boolean;
+         stroke: string;
+         fill: string;
+      }>
    > = $props();
 </script>
 
@@ -23,8 +29,9 @@
    {width}
    {height}
    type={data.type}
-   strokeWidth={data.stroke}
-   fill={data.willConnect ? "#000000" : undefined}
+   stroke={data.stroke}
+   strokeWidth={data.strokeWidth}
+   fill={data.willConnect ? "#000000" : data.fill}
 />
 <Handle
    class={selected || data.willConnect ? "visible" : "invisible"}
