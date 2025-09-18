@@ -1,59 +1,68 @@
 <script lang="ts">
+   import type { ShapeData } from "$lib/types/ShapeType";
    import {
       Handle,
       NodeResizer,
       Position,
+      useSvelteFlow,
       type Node,
       type NodeProps,
    } from "@xyflow/svelte";
    import FlowchartShape from "./FlowchartShape.svelte";
 
-   const {
-      width = 170,
-      height = 60,
-      selected,
-      data,
-   }: NodeProps<
-      Node<{
-         type: string;
-         strokeWidth: number;
-         willConnect: boolean;
-         stroke: string;
-         fill: string;
-      }>
-   > = $props();
+   const { width, height, data, ...p }: NodeProps<Node<ShapeData>> = $props();
+   const { updateNodeData } = useSvelteFlow<Node<ShapeData>>();
+   let el: HTMLElement | undefined = $state();
+   let isInputFocus = $derived(el == document.activeElement);
+   $effect(() => {
+      if (el && el.innerText !== data.text) {
+         el.innerText = data.text;
+      }
+   });
 </script>
 
-<NodeResizer isVisible={selected} keepAspectRatio={data.type == "circle"} />
+<NodeResizer isVisible={p.selected} keepAspectRatio={data.type == "circle"} />
+<div
+   bind:this={el}
+   oninput={(e) => {
+      let text = e.currentTarget.innerText;
+      if (text == "\n") text = text.replace("\n", "");
+      updateNodeData(p.id, { text });
+   }}
+   role="textbox"
+   tabindex="0"
+   contenteditable
+   style="max-width:{width}px;
+   font-size:{data.fontSize}px;
+   text-align:{data.textAlign};"
+   class="{isInputFocus
+      ? 'nodrag'
+      : ''} w-max outline-none absolute absolute-center">
+</div>
 <FlowchartShape
    {width}
    {height}
    type={data.type}
    stroke={data.stroke}
    strokeWidth={data.strokeWidth}
-   fill={data.willConnect ? "#000000" : data.fill}
-/>
+   fill={data.fill} />
 <Handle
-   class={selected || data.willConnect ? "visible" : "invisible"}
+   class={p.selected || data.willConnect ? "visible" : "invisible"}
    id="1"
    position={Position.Left}
-   type="source"
-/>
+   type="source" />
 <Handle
-   class={selected || data.willConnect ? "visible" : "invisible"}
+   class={p.selected || data.willConnect ? "visible" : "invisible"}
    id="2"
    position={Position.Right}
-   type="source"
-/>
+   type="source" />
 <Handle
-   class={selected || data.willConnect ? "visible" : "invisible"}
+   class={p.selected || data.willConnect ? "visible" : "invisible"}
    id="3"
    position={Position.Top}
-   type="source"
-/>
+   type="source" />
 <Handle
-   class={selected || data.willConnect ? "visible" : "invisible"}
+   class={p.selected || data.willConnect ? "visible" : "invisible"}
    id="4"
    position={Position.Bottom}
-   type="source"
-/>
+   type="source" />

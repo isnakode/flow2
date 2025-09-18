@@ -1,3 +1,5 @@
+import type { Dimensions, XYPosition } from "@xyflow/svelte";
+
 export type ShapeType =
    | "start"
    | "io"
@@ -53,4 +55,57 @@ export function nanoId(size = 21) {
    const arr = new Uint8Array(size);
    crypto.getRandomValues(arr);
    return Array.from(arr, n => chars[n % chars.length]).join('');
+}
+
+
+export type ShapeData = {
+   type: ShapeType;
+   strokeWidth: number;
+   willConnect?: boolean;
+   stroke: string;
+   fill: string;
+   text: string;
+   fontSize: number;
+   textAlign: 'left' | 'center' | 'right' | 'justify';
+}
+
+export const createShapeData = (type: ShapeType): ShapeData => ({
+   type,
+   strokeWidth: 1,
+   fontSize: 14,
+   stroke: "#6B6B6B",
+   fill: "#dbdbdb",
+   textAlign: "center",
+   text: ''
+})
+
+export type Property = Omit<ShapeData, "willConnect"> &
+   Partial<Dimensions> &
+   XYPosition;
+
+export const mergeObjects = <T extends Property>(
+   ...arr: T[]
+): T | (Partial<T> & { [K in keyof T]: T[K] | undefined }) => {
+   if (arr.length === 0) return {} as any
+   if (arr.length === 1) return arr[0]
+
+   const result = {} as any
+   const keys = Object.keys(arr[0]) as (keyof T)[]
+   const len = arr.length
+
+   for (const key of keys) {
+      const firstVal = arr[0][key]
+      let allSame = true
+
+      for (let i = 1; i < len; i++) {
+         if (arr[i][key] !== firstVal) {
+            allSame = false
+            break
+         }
+      }
+
+      result[key] = allSame ? firstVal : undefined
+   }
+
+   return result
 }

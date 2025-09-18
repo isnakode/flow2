@@ -29,3 +29,17 @@
 .svelte-flow__handle{
   @apply  bg-blue-600!
 }
+
+.svelte-flow__selection-wrapper > .svelte-flow__selection {
+  background: none;
+  border: none;
+  outline: none;
+}
+
+.svelte-flow__selection-wrapper {
+  outline: none;
+}
+
+@utility absolute-center{
+  @apply  left-1/2 top-1/2 -translate-1/2
+}

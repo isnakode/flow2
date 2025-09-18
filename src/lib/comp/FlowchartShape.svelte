@@ -6,8 +6,7 @@
    {width}
    {height}
    {fill}
-   viewBox="-{strokeWidth / 2} -{strokeWidth / 2} {width +
-      strokeWidth} {height + strokeWidth}"
+   viewBox="-{strokeWidth / 2} -{strokeWidth / 2} {width + strokeWidth} {height + strokeWidth}"
    stroke-width={strokeWidth}
    stroke={strokeWidth > 0 ? stroke : "transparent"}
    stroke-linejoin="round"
@@ -74,9 +73,7 @@
       />
    {:else if type == "loop-limit"}
       {@const bevel = width * 0.2}
-      <path
-         d="M{bevel} 0H{width - bevel}L{width} {bevel}V{height}H0V{bevel}Z"
-      />
+      <path d="M{bevel} 0H{width - bevel}L{width} {bevel}V{height}H0V{bevel}Z" />
    {:else if type == "delay"}
       {@const rx = width / 2}
       {@const ry = height / 2}
@@ -119,9 +116,7 @@
    {:else if type == "db"}
       {@const r = width / 2}
       {@const h = height * 0.15}
-      <path
-         d="M{width} {height - h}A{r} {h} 0 1 1 0 {height - h}V{h}H{width}Z"
-      />
+      <path d="M{width} {height - h}A{r} {h} 0 1 1 0 {height - h}V{h}H{width}Z" />
       <ellipse cx={r} cy={h} rx={r} ry={h} />
    {/if}
 </svg>
