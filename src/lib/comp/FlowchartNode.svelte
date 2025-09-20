@@ -13,16 +13,19 @@
    const { width, height, data, ...p }: NodeProps<Node<ShapeData>> = $props();
    const { updateNodeData } = useSvelteFlow<Node<ShapeData>>();
    let el: HTMLElement | undefined = $state();
-   let isInputFocus = $derived(el == document.activeElement);
    $effect(() => {
       if (el && el.innerText !== data.text) {
          el.innerText = data.text;
       }
    });
+   let activeElement: HTMLElement | null = $state(null);
 </script>
+
+<svelte:document bind:activeElement />
 
 <NodeResizer isVisible={p.selected} keepAspectRatio={data.type == "circle"} />
 <div
+   id="node-label-input-{p.id}"
    bind:this={el}
    oninput={(e) => {
       let text = e.currentTarget.innerText;
@@ -35,8 +38,8 @@
    style="max-width:{width}px;
    font-size:{data.fontSize}px;
    text-align:{data.textAlign};"
-   class="{isInputFocus
-      ? 'nodrag'
+   class="{activeElement == el
+      ? 'nodrag nopan'
       : ''} w-max outline-none absolute absolute-center">
 </div>
 <FlowchartShape

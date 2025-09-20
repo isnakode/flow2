@@ -73,13 +73,13 @@ export const createShapeData = (type: ShapeType): ShapeData => ({
    type,
    strokeWidth: 1,
    fontSize: 14,
-   stroke: "#6B6B6B",
-   fill: "#dbdbdb",
+   stroke: "#A5A5A5",
+   fill: "#515156",
    textAlign: "center",
    text: ''
 })
 
-export type Property = Omit<ShapeData, "willConnect"> &
+export type Property = Omit<ShapeData, "willConnect"> & { id: string } &
    Partial<Dimensions> &
    XYPosition;
 
@@ -108,4 +108,16 @@ export const mergeObjects = <T extends Property>(
    }
 
    return result
+}
+
+export function placeCaretAtEnd(el: HTMLElement) {
+   if (!el) return;
+
+   const range = document.createRange();
+   const sel = window.getSelection();
+
+   range.selectNodeContents(el);
+   range.collapse(false); // false = ke akhir
+   sel?.removeAllRanges();
+   sel?.addRange(range);
 }

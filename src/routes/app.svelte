@@ -1,20 +1,15 @@
 <script lang="ts">
-  import ExportIcon from "$lib/assets/icons/export.svg";
-  import Maximize from "$lib/assets/icons/maximize.svg";
-  import SaveIcon from "$lib/assets/icons/save.svg";
-  import ShapeIcon from "$lib/assets/icons/shape.svg";
-  import ITextCenter from "$lib/assets/icons/text-center.svg";
-  import ITextJustify from "$lib/assets/icons/text-justify.svg";
-  import ITextLeft from "$lib/assets/icons/text-left.svg";
-  import ITextRight from "$lib/assets/icons/text-right.svg";
-  import ZoomIn from "$lib/assets/icons/ZoomIn.svg";
-  import ZoomOut from "$lib/assets/icons/ZoomOut.svg";
+  import ExportIcon from "$lib/assets/icons/export.svelte";
+  import Maximize from "$lib/assets/icons/maximize.svelte";
+  import ShapeIcon from "$lib/assets/icons/shape.svelte";
+  import ZoomIn from "$lib/assets/icons/ZoomIn.svelte";
+  import ZoomOut from "$lib/assets/icons/ZoomOut.svelte";
   import FlowchartNode from "$lib/comp/FlowchartNode.svelte";
   import FlowchartShape from "$lib/comp/FlowchartShape.svelte";
   import {
     createShapeData,
-    mergeObjects,
     nanoId,
+    placeCaretAtEnd,
     scaleToMax,
     templates,
     type Property,
@@ -25,10 +20,13 @@
   import Lz from "lz-string";
 
   import { browser } from "$app/environment";
+  import LabeledEdge from "$lib/comp/LabeledEdge.svelte";
   import { shortcut } from "@svelte-put/shortcut";
   import {
+    Background,
     ConnectionLineType,
     ConnectionMode,
+    getViewportForBounds,
     isNode,
     Panel,
     SvelteFlow,
@@ -38,14 +36,20 @@
     useStore,
     useSvelteFlow,
     type Edge,
+    type EdgeTypes,
     type Node,
     type NodeTypes,
     type XYPosition,
   } from "@xyflow/svelte";
+  import { toPng } from "html-to-image";
   import { onMount } from "svelte";
+  import NodePropertyPanel from "./NodePropertyPanel.svelte";
 
   const nodeTypes: NodeTypes = {
     flow: FlowchartNode,
+  };
+  const edgeTypes: EdgeTypes = {
+    label: LabeledEdge,
   };
   const node = useNodes();
   const edge = useEdges();
@@ -75,6 +79,7 @@
   const nodeToProperty = (node: Node<ShapeData>): Property => ({
     ...node.position,
     ...node.data,
+    id: node.id,
     width: node.width,
     height: node.height,
   });
@@ -149,27 +154,12 @@
     await st.fitView();
     await setZoom(1);
   });
-  const textAlignData = [
-    {
-      icon: ITextLeft,
-      align: "left",
-    },
-    {
-      icon: ITextCenter,
-      align: "center",
-    },
-    {
-      icon: ITextRight,
-      align: "right",
-    },
-    {
-      icon: ITextJustify,
-      align: "justify",
-    },
-  ];
+
   let clickTimer: number | null = null;
+  let edgeTimer: number | null = null;
   let dragedShape: (typeof templates)[number] | null = $state(null);
   const addShape = (t: (typeof templates)[number], p: XYPosition) => {
+    nodes = nodes.map((n) => ({ ...n, selected: false }));
     const position = screenToFlowPosition(p);
     const newNode: Node<ShapeData> = {
       id: nanoId(15),
@@ -177,25 +167,47 @@
       width: t.width,
       type: "flow",
       position,
+      selected: true,
       data: createShapeData(t.type as ShapeType),
     };
     node.set([...nodes, newNode]);
   };
 
-  let property = $derived.by(() => {
-    return mergeObjects(...selectedNodes.map(nodeToProperty));
-  });
-  function placeCaretAtEnd(el: HTMLElement) {
-    if (!el) return;
+  const download = () => {
+    const width = 2480;
+    const height = 3508;
+    const nodesBounds = getNodesBounds(nodes);
+    const viewport = getViewportForBounds(
+      nodesBounds,
+      width,
+      height,
+      0.5,
+      2.0,
+      0.2,
+    );
 
-    const range = document.createRange();
-    const sel = window.getSelection();
+    const viewportDomNode = document.querySelector<HTMLElement>(
+      ".svelte-flow__viewport",
+    )!;
 
-    range.selectNodeContents(el);
-    range.collapse(false); // false = ke akhir
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-  }
+    if (viewport) {
+      toPng(viewportDomNode, {
+        backgroundColor: "white",
+        width,
+        height,
+        style: {
+          width: `${width}px`,
+          height: `${height}px`,
+          transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
+        },
+      }).then((dataUrl) => {
+        const link = document.createElement("a");
+        link.download = "svelte-flow.png";
+        link.href = dataUrl;
+        link.click();
+      });
+    }
+  };
 </script>
 
 <svelte:window
@@ -248,11 +260,31 @@
         });
       }
     }}
-    onnodeclick={async (e) => {
-      const el = e.event.currentTarget as HTMLElement;
-      const input = el.querySelector<HTMLElement>("[contenteditable]");
+    onedgeclick={(e) => {
+      const input = document.querySelector<HTMLElement>(
+        `#edge-label-input-${e.edge.id}`,
+      );
 
-      const editable = el?.isContentEditable;
+      if (clickTimer) {
+        clearTimeout(clickTimer);
+        clickTimer = null;
+        setTimeout(() => {
+          if (input) {
+            input.focus();
+            placeCaretAtEnd(input);
+          }
+        });
+      } else {
+        clickTimer = setTimeout(() => (clickTimer = null), 300);
+      }
+    }}
+    onnodeclick={async (e) => {
+      console.log(document.activeElement);
+
+      const input = document.querySelector<HTMLElement>(
+        `#node-label-input-${e.node.id}`,
+      );
+
       if (clickTimer) {
         clearTimeout(clickTimer);
         clickTimer = null;
@@ -279,15 +311,17 @@
     multiSelectionKey={["Shift", "Control"]}
     elevateNodesOnSelect={true}
     deleteKey={["Delete", "Backspace"]}
-    connectionLineType={ConnectionLineType.SmoothStep}
+    connectionLineType={ConnectionLineType.Bezier}
     panOnDrag={[1, 2]}
     snapGrid={[10, 10]}
     {nodeTypes}
+    {edgeTypes}
     bind:nodes
     bind:edges
     defaultEdgeOptions={{
-      type: "smoothstep",
-      label: "halo",
+      type: "label",
+      label: "",
+      data: { type: "smooth" },
       markerEnd: { type: "arrowclosed" },
     }}
     {onmousemove}
@@ -299,318 +333,74 @@
       }
     }}
     connectionMode={ConnectionMode.Loose}>
+    <Background bgColor="#232323" />
+    <Panel
+      position="top-left"
+      class="bg-zinc-900 w-52 flex *:hover:bg-zinc-700 *:px-2  m-0! text-white">
+      <button>File</button>
+      <button>Edit</button>
+    </Panel>
     <Panel
       position="center-left"
-      class="bg-white rounded-md p-1 shadow-lg border border-gray-200 flex flex-col gap-1">
-      {#each [ShapeIcon, ExportIcon, SaveIcon] as icon, i}
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-        <div tabindex="0" class="aspect-square cursor-pointer relative group">
-          <p class="size-8 p-1.5 rounded hover:bg-blue-100">
-            <img src={icon} alt="" />
-          </p>
-          {#if i == 0}
-            <div
-              class="bg-white rounded-md gap-1 p-1 shadow-lg border border-gray-200 group-focus-within:grid hidden grid-cols-[repeat(4,max-content)] absolute left-[120%] top-1/2 -translate-y-1/2">
-              {#each templates as t (t.type)}
-                {@const [width, height] = scaleToMax([t.width, t.height], 32)}
-                <button
-                  draggable="true"
-                  ondragstart={(e) => {
-                    dragedShape = t;
-                  }}
-                  ondragend={(e) => {
-                    dragedShape = null;
-                  }}
-                  onclick={() => {
-                    addShape(t, {
-                      x: window.innerWidth / 2 - t.width,
-                      y: window.innerHeight / 2 - t.height,
-                    });
-                  }}
-                  class="flex justify-center items-center aspect-square p-0.5 bg-transparent rounded {dragedShape
-                    ? ''
-                    : 'hover:bg-blue-200'}">
-                  <FlowchartShape
-                    type={t.type}
-                    {width}
-                    {height}
-                    strokeWidth={1}
-                    stroke="#6B6B6B"
-                    fill="#dbdbdb" />
-                </button>
-              {/each}
-            </div>
-          {/if}
+      class="bg-zinc-900 rounded-md p-1 shadow-lg border flex flex-col gap-1">
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <div tabindex="0" class="aspect-square cursor-pointer relative group">
+        <p class="size-8 p-1.5 rounded hover:bg-zinc-700 text-white">
+          <ShapeIcon class="size-5" />
+        </p>
+        <div
+          class="bg-zinc-900 rounded-md gap-1 p-1 shadow-lg group-focus-within:grid hidden grid-cols-[repeat(4,max-content)] absolute left-[120%] top-1/2 -translate-y-1/2">
+          {#each templates as t (t.type)}
+            {@const [width, height] = scaleToMax([t.width, t.height], 32)}
+            <button
+              draggable="true"
+              ondragstart={() => {
+                dragedShape = t;
+              }}
+              ondragend={() => {
+                dragedShape = null;
+              }}
+              onclick={() => {
+                addShape(t, {
+                  x: window.innerWidth / 2 - t.width,
+                  y: window.innerHeight / 2 - t.height,
+                });
+              }}
+              class="flex justify-center cursor-pointer items-center aspect-square p-0.5 bg-transparent rounded {dragedShape
+                ? ''
+                : 'hover:bg-zinc-600'}">
+              <FlowchartShape
+                type={t.type}
+                {width}
+                {height}
+                strokeWidth={1}
+                stroke="#A5A5A5"
+                fill="#515156" />
+            </button>
+          {/each}
         </div>
-      {/each}
+      </div>
       <button
         onclick={async () => await st.fitView()}
-        class="aspect-square cursor-pointer relative group">
-        <p class="size-8 p-1.5 rounded hover:bg-blue-100">
-          <img src={Maximize} alt="" />
-        </p>
+        class="aspect-square cursor-pointer p-1.5 rounded hover:bg-zinc-700 text-gray-200">
+        <Maximize class="size-5" />
       </button>
       <button
-        onclick={async () => {
-          await st.zoomIn();
-        }}
-        class="aspect-square cursor-pointer relative group">
-        <p class="size-8 p-1.5 rounded hover:bg-blue-100">
-          <img src={ZoomIn} alt="" />
-        </p>
+        onclick={download}
+        class="aspect-square cursor-pointer p-1.5 rounded hover:bg-zinc-700 text-gray-200">
+        <ExportIcon class="size-5" />
+      </button>
+      <button
+        onclick={async () => await st.zoomIn()}
+        class="aspect-square cursor-pointer p-1.5 rounded hover:bg-zinc-700 text-gray-200">
+        <ZoomIn class="size-5" />
       </button>
       <button
         onclick={async () => await st.zoomOut()}
-        class="aspect-square cursor-pointer relative group">
-        <p class="size-8 p-1.5 rounded hover:bg-blue-100">
-          <img src={ZoomOut} alt="" />
-        </p>
+        class="aspect-square cursor-pointer p-1.5 rounded hover:bg-zinc-700 text-gray-200">
+        <ZoomOut class="size-5" />
       </button>
     </Panel>
-    <Panel
-      position="top-right"
-      class="bg-white px-2 shadow-lg border w-52 border-gray-200 flex flex-col gap-1 m-0! h-dvh">
-      <div class="flex gap-2">
-        <div class="w-full">
-          <label for="x-input" class="label text-xs">x</label>
-          <input
-            id="x-input"
-            class="input input-sm"
-            type="number"
-            value={property.x}
-            oninput={(e) => {
-              nodes = nodes.map((n) => {
-                if (nodeIds.has(n.id)) {
-                  return {
-                    ...n,
-                    position: {
-                      ...n.position,
-                      x: parseInt(e.currentTarget.value),
-                    },
-                  };
-                }
-                return n;
-              });
-            }} />
-        </div>
-        <div class="w-full">
-          <label for="y-input" class="label text-xs">y</label>
-          <input
-            id="y-input"
-            class="input input-sm"
-            type="number"
-            value={property.y}
-            oninput={(e) => {
-              nodes = nodes.map((n) => {
-                if (nodeIds.has(n.id)) {
-                  return {
-                    ...n,
-                    position: {
-                      ...n.position,
-                      x: parseInt(e.currentTarget.value),
-                    },
-                  };
-                }
-                return n;
-              });
-            }} />
-        </div>
-      </div>
-      <div class="flex gap-2">
-        <div class="w-full">
-          <label for="width-input" class="label text-xs">Width</label>
-          <input
-            id="width-input"
-            class="input input-sm"
-            type="number"
-            value={property.width}
-            oninput={(e) => {
-              nodes = nodes.map((n) => {
-                if (nodeIds.has(n.id)) {
-                  if (n.data.type == "circle") {
-                    return {
-                      ...n,
-                      width: parseInt(e.currentTarget.value),
-                      height: parseInt(e.currentTarget.value),
-                    };
-                  }
-                  return {
-                    ...n,
-                    width: parseInt(e.currentTarget.value),
-                  };
-                }
-                return n;
-              });
-            }} />
-        </div>
-        <div class="w-full">
-          <label for="height-input" class="label text-xs">Height</label>
-          <input
-            id="height-input"
-            class="input input-sm"
-            type="number"
-            value={property.height}
-            oninput={(e) => {
-              nodes = nodes.map((n) => {
-                if (nodeIds.has(n.id)) {
-                  if (n.data.type == "circle") {
-                    return {
-                      ...n,
-                      width: parseInt(e.currentTarget.value),
-                      height: parseInt(e.currentTarget.value),
-                    };
-                  }
-                  return {
-                    ...n,
-                    height: parseInt(e.currentTarget.value),
-                  };
-                }
-                return n;
-              });
-            }} />
-        </div>
-      </div>
-      <div class="flex gap-2">
-        <div class="w-full">
-          <label for="color-input" class="label text-xs"> Fill </label>
-          <input
-            id="color-input"
-            class="input input-sm"
-            type="color"
-            value={property.fill ?? "#000000"}
-            oninput={(e) => {
-              nodes = nodes.map((n) => {
-                if (nodeIds.has(n.id)) {
-                  return {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      fill: e.currentTarget.value,
-                    },
-                  };
-                }
-                return n;
-              });
-            }} />
-        </div>
-        <div class="w-full">
-          <label for="border-color-input" class="label text-xs"> Border </label>
-          <input
-            id="border-color-input"
-            class="input input-sm"
-            type="color"
-            value={property.stroke ?? "#000000"}
-            oninput={(e) => {
-              nodes = nodes.map((n) => {
-                if (nodeIds.has(n.id)) {
-                  return {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      stroke: e.currentTarget.value,
-                    },
-                  };
-                }
-                return n;
-              });
-            }} />
-        </div>
-      </div>
-      <div class="flex gap-2">
-        <div class="w-full">
-          <label for="stroke-width-input" class="label text-xs">
-            Border width
-          </label>
-          <input
-            id="stroke-width-input"
-            class="input input-sm"
-            type="number"
-            value={property.strokeWidth}
-            oninput={(e) => {
-              const v = e.currentTarget.value;
-              nodes = nodes.map((n) => {
-                if (nodeIds.has(n.id)) {
-                  return {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      strokeWidth: Number(v) || 0,
-                    },
-                  };
-                }
-                return n;
-              });
-            }} />
-        </div>
-        <div class="w-full">
-          <label for="font-size-input" class="label text-xs"> Font size </label>
-          <input
-            id="font-size-input"
-            class="input input-sm"
-            type="number"
-            value={property.fontSize}
-            oninput={(e) => {
-              const v = e.currentTarget.value;
-              nodes = nodes.map((n) => {
-                if (nodeIds.has(n.id)) {
-                  return {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      fontSize: v == "" ? 0 : parseInt(v),
-                    },
-                  };
-                }
-                return n;
-              });
-            }} />
-        </div>
-      </div>
-
-      <label for="node-text-input" class="label text-xs"> Text </label>
-      <textarea
-        id="node-text-input"
-        class="textarea textarea-sm text-left"
-        oninput={(e) => {
-          const text = e.currentTarget.value;
-          nodes = nodes.map((n) => {
-            if (nodeIds.has(n.id)) {
-              return {
-                ...n,
-                data: {
-                  ...n.data,
-                  text,
-                },
-              };
-            }
-            return n;
-          });
-        }}>{property.text}</textarea>
-      <div class="flex gap-1 justify-center mt-1">
-        {#each textAlignData as data}
-          <button
-            onclick={() => {
-              nodes = nodes.map((n) => {
-                if (nodeIds.has(n.id)) {
-                  return {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      textAlign: data.align as any,
-                    },
-                  };
-                }
-                return n;
-              });
-            }}
-            class="size-8 rounded-md p-1.5 cursor-pointer
-                     {property.textAlign == data.align
-              ? 'bg-blue-200'
-              : 'hover:bg-blue-100'}">
-            <img src={data.icon} alt={data.align} />
-          </button>
-        {/each}
-      </div>
-    </Panel>
+    <NodePropertyPanel properties={selectedNodes.map(nodeToProperty)} />
   </SvelteFlow>
 </div>
